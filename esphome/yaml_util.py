@@ -444,6 +444,9 @@ class ESPHomeLoader(
 
     @_add_data_ref
     def construct_merge(self, node):
+        if self.disable_str_expansion:
+            return None
+
         def merge(old, new):
             # pylint: disable=no-else-return
             if isinstance(new, dict):
@@ -475,7 +478,7 @@ class ESPHomeLoader(
                             del index[id]
                     merged_old.append(item)
 
-                return merged_old + [v for v in index.values()]
+                return merged_old + list(index.values())
             elif new is None:
                 return old
 
@@ -492,6 +495,7 @@ class ESPHomeLoader(
         value = None
         for obj in mergelist:
             value = merge(value, obj)
+        print(value)
         return value
 
     @_add_data_ref
