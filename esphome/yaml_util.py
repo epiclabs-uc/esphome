@@ -11,9 +11,19 @@ import yaml.constructor
 
 from jinja2.exceptions import TemplateError, TemplateSyntaxError, UndefinedError
 
-from esphome import core
+from esphome import core, git
 from esphome.config_helpers import read_config_file
-from esphome.const import CONF_SUBSTITUTIONS
+from esphome.const import (
+    CONF_FILE,
+    CONF_ID,
+    CONF_PASSWORD,
+    CONF_REF,
+    CONF_REFRESH,
+    CONF_SUBSTITUTIONS,
+    CONF_URL,
+    CONF_USERNAME,
+    CONF_VARS,
+)
 from esphome.core import (
     EsphomeError,
     IPAddress,
@@ -37,6 +47,19 @@ _SECRET_VALUES = {}
 
 class ForList(list):
     pass
+
+
+INCLUDE_SCHEMA = cv.Schema(
+    {
+        cv.Required(CONF_FILE): cv.string,
+        cv.Optional(CONF_URL): cv.url,
+        cv.Optional(CONF_USERNAME): cv.string,
+        cv.Optional(CONF_PASSWORD): cv.string,
+        cv.Optional(CONF_REF): cv.git_ref,
+        cv.Optional(CONF_REFRESH, default="1d"): cv.All(cv.string, cv.source_refresh),
+        cv.Optional(CONF_VARS): validate_vars,
+    }
+)
 
 
 class ESPForceValue:
@@ -287,19 +310,34 @@ class ESPHomeLoader(
     @_add_data_ref
     def construct_include(self, node):
         def extract_file_vars(node):
-            fields = self.construct_yaml_map(node)
-            file = fields.get("file")
+            fields = INCLUDE_SCHEMA(self.construct_yaml_map(node))
+            file = fields.get(CONF_FILE)
+            url = fields.get(CONF_URL)
             if file is None:
                 raise yaml.MarkedYAMLError("Must include 'file'", node.start_mark)
-            vars = fields.get("vars") or {}
-            return file, validate_vars(vars)
+            vars = fields.get(CONF_VARS) or {}
+            if url is not None:
+                repo_dir = git.clone_or_update(
+                    url=url,
+                    ref=fields.get(CONF_REF),
+                    refresh=fields[CONF_REFRESH],
+                    domain="includes",
+                    username=fields.get(CONF_USERNAME),
+                    password=fields.get(CONF_PASSWORD),
+                )
+                path = repo_dir / file
+            else:
+                path = self._rel_path(file)
+
+            return path, validate_vars(vars)
 
         if isinstance(node, yaml.nodes.MappingNode):
-            file, vars = extract_file_vars(node)
+            path, vars = extract_file_vars(node)
         else:
             file, vars = node.value, {}
+            path = self._rel_path(file)
 
-        return _load_yaml_internal(self._rel_path(file), {**self.vars, **vars})
+        return _load_yaml_internal(path, {**self.vars, **vars})
 
     @_add_data_ref
     def construct_literal(self, node):
@@ -405,6 +443,58 @@ class ESPHomeLoader(
         return None
 
     @_add_data_ref
+    def construct_merge(self, node):
+        def merge(old, new):
+            # pylint: disable=no-else-return
+            if isinstance(new, dict):
+                if not isinstance(old, dict):
+                    return new
+                res = old.copy()
+                for k, v in new.items():
+                    res[k] = merge(old[k], v) if k in old else v
+                return res
+            elif isinstance(new, list):
+                if not isinstance(old, list):
+                    return new
+                index = OrderedDict()
+                pos = 0
+                for item in new:
+                    if isinstance(item, dict) and CONF_ID in item:
+                        index[str(item[CONF_ID])] = item
+                    else:
+                        index[pos] = item
+                        pos += 1
+
+                merged_old = []
+                for item in old:
+                    if isinstance(item, dict) and CONF_ID in item:
+                        id = str(item[CONF_ID])
+                        if id in index:
+                            new_item = index[id]
+                            item = merge(item, new_item)
+                            del index[id]
+                    merged_old.append(item)
+
+                return merged_old + [v for v in index.values()]
+            elif new is None:
+                return old
+
+            return new
+
+        if not isinstance(node, yaml.SequenceNode):
+            raise yaml.MarkedYAMLError(
+                "!merge expects a list",
+                node.start_mark,
+            )
+        node = deepcopy(node)
+        node.tag = self.DEFAULT_SEQUENCE_TAG
+        mergelist = self.construct_object(node)
+        value = None
+        for obj in mergelist:
+            value = merge(value, obj)
+        return value
+
+    @_add_data_ref
     def construct_include_dir_list(self, node):
         files = filter_yaml_files(_find_files(self._rel_path(node.value), "*.yaml"))
         return [_load_yaml_internal(f, self.vars.copy()) for f in files]
@@ -472,6 +562,8 @@ ESPHomeLoader.add_constructor("!include", ESPHomeLoader.construct_include)
 ESPHomeLoader.add_constructor("!literal", ESPHomeLoader.construct_literal)
 ESPHomeLoader.add_constructor("!for", ESPHomeLoader.construct_for)
 ESPHomeLoader.add_constructor("!if", ESPHomeLoader.construct_if)
+ESPHomeLoader.add_constructor("!merge", ESPHomeLoader.construct_merge)
+
 ESPHomeLoader.add_constructor(
     "!include_dir_list", ESPHomeLoader.construct_include_dir_list
 )

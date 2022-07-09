@@ -7,7 +7,6 @@ import urllib.parse
 from datetime import datetime
 
 from esphome.core import CORE, TimePeriodSeconds
-import esphome.config_validation as cv
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -16,7 +15,7 @@ def run_git_command(cmd, cwd=None):
     try:
         ret = subprocess.run(cmd, cwd=cwd, capture_output=True, check=False)
     except FileNotFoundError as err:
-        raise cv.Invalid(
+        raise Exception(
             "git is not installed but required for external_components.\n"
             "Please see https://git-scm.com/book/en/v2/Getting-Started-Installing-Git for installing git"
         ) from err
@@ -25,8 +24,8 @@ def run_git_command(cmd, cwd=None):
         err_str = ret.stderr.decode("utf-8")
         lines = [x.strip() for x in err_str.splitlines()]
         if lines[-1].startswith("fatal:"):
-            raise cv.Invalid(lines[-1][len("fatal: ") :])
-        raise cv.Invalid(err_str)
+            raise Exception(lines[-1][len("fatal: ") :])
+        raise Exception(err_str)
 
 
 def _compute_destination_path(key: str, domain: str) -> Path:
