@@ -1,5 +1,11 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
+from esphome.cpp_generator import (
+    AssignmentExpression,
+    MockObj,
+    RawExpression,
+    UnaryOpExpression,
+)
 import esphome.final_validate as fv
 from esphome import automation
 from esphome.automation import Condition
@@ -325,7 +331,11 @@ def manual_ip(config):
 
 
 def wifi_network(config, static_ip):
-    ap = cg.variable(config[CONF_ID], WiFiAP())
+    id = config[CONF_ID]
+    cg.add(
+        AssignmentExpression(id.type, "*", id, id.type.new())
+    )  # declare as a local pointer
+    ap = MockObj(id, "->")
     if CONF_SSID in config:
         cg.add(ap.set_ssid(config[CONF_SSID]))
     if CONF_PASSWORD in config:
@@ -354,13 +364,17 @@ async def to_code(config):
 
     for network in config.get(CONF_NETWORKS, []):
         ip_config = network.get(CONF_MANUAL_IP, config.get(CONF_MANUAL_IP))
-        cg.add(var.add_sta(wifi_network(network, ip_config)))
+        ap = wifi_network(network, ip_config)
+        cg.add(var.add_sta(UnaryOpExpression("*", ap)))
+        cg.add(RawExpression(f"delete {ap}"))
 
     if CONF_AP in config:
         conf = config[CONF_AP]
         ip_config = conf.get(CONF_MANUAL_IP, config.get(CONF_MANUAL_IP))
-        cg.add(var.set_ap(wifi_network(conf, ip_config)))
+        ap = wifi_network(conf, ip_config)
+        cg.add(var.set_ap(UnaryOpExpression("*", ap)))
         cg.add(var.set_ap_timeout(conf[CONF_AP_TIMEOUT]))
+        cg.add(RawExpression(f"delete {ap}"))
 
     cg.add(var.set_reboot_timeout(config[CONF_REBOOT_TIMEOUT]))
     cg.add(var.set_power_save_mode(config[CONF_POWER_SAVE_MODE]))
