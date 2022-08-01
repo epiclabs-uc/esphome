@@ -123,7 +123,7 @@ class Switch : public EntityBase {
 };
 
 #define LOG_SWITCH(prefix, type, obj) log_switch((TAG), (prefix), LOG_STR_LITERAL(type), (obj))
-void log_switch(const char *TAG, const char *prefix, const char *type, Switch *obj);
+void log_switch(const char *tag, const char *prefix, const char *type, Switch *obj);
 
 }  // namespace switch_
 }  // namespace esphome
