@@ -67,9 +67,9 @@ std::string Switch::get_device_class() {
 }
 void Switch::set_device_class(const std::string &device_class) { this->device_class_ = device_class; }
 
-void LOG_SWITCH_(const char *TAG, const char *prefix, const char *type, Switch *obj) {
+void log_switch(const char *TAG, const char *prefix, const char *type, Switch *obj) {
   if (obj != nullptr) {
-    ESP_LOGCONFIG(TAG, "%s%s '%s'", prefix, LOG_STR_LITERAL(type), obj->get_name().c_str());
+    ESP_LOGCONFIG(TAG, "%s%s '%s'", prefix, type, obj->get_name().c_str());
     if (!obj->get_icon().empty()) {
       ESP_LOGCONFIG(TAG, "%s  Icon: '%s'", prefix, obj->get_icon().c_str());
     }
