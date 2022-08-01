@@ -82,14 +82,14 @@ void log_switch(const char *tag, const char *prefix, const char *type, Switch *o
     if (!obj->get_device_class().empty()) {
       ESP_LOGCONFIG(tag, "%s  Device Class: '%s'", prefix, obj->get_device_class().c_str());
     }
-  }
-  const LogString *onoff = obj->restore_mode & RESTORE_MODE_ON_MASK ? LOG_STR("ON") : LOG_STR("OFF");
-  const LogString *inverted = obj->restore_mode & RESTORE_MODE_INVERTED_MASK ? LOG_STR("inverted ") : LOG_STR("");
-  const LogString *restore =
-      obj->restore_mode & RESTORE_MODE_PERSISTENT_MASK ? LOG_STR("restore defaults to") : LOG_STR("always");
+    const LogString *onoff = obj->restore_mode & RESTORE_MODE_ON_MASK ? LOG_STR("ON") : LOG_STR("OFF");
+    const LogString *inverted = obj->restore_mode & RESTORE_MODE_INVERTED_MASK ? LOG_STR("inverted ") : LOG_STR("");
+    const LogString *restore =
+        obj->restore_mode & RESTORE_MODE_PERSISTENT_MASK ? LOG_STR("restore defaults to") : LOG_STR("always");
 
-  ESP_LOGCONFIG(tag, "%s  Restore Mode: %s%s %s", prefix, LOG_STR_ARG(inverted), LOG_STR_ARG(restore),
-                LOG_STR_ARG(onoff));
+    ESP_LOGCONFIG(tag, "%s  Restore Mode: %s%s %s", prefix, LOG_STR_ARG(inverted), LOG_STR_ARG(restore),
+                  LOG_STR_ARG(onoff));
+  }
 }
 
 }  // namespace switch_
