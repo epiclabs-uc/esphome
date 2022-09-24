@@ -38,9 +38,7 @@ void CronTrigger::loop() {
       return;
     }
 
-    int it = 0;
     while (true) {
-      it++;
       this->last_check_->increment_second();
       if (*this->last_check_ >= time)
         break;
