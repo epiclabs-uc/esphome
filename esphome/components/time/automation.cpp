@@ -31,7 +31,16 @@ void CronTrigger::loop() {
       return;
     }
 
+    if (time > *this->last_check_ && time.timestamp - this->last_check_->timestamp > 900) {
+      // We went ahead in time (a lot), probably caused by time synchronization
+      ESP_LOGW(TAG, "Time has jumped ahead!");
+      this->last_check_ = time;
+      return;
+    }
+
+    int it = 0;
     while (true) {
+      it++;
       this->last_check_->increment_second();
       if (*this->last_check_ >= time)
         break;
