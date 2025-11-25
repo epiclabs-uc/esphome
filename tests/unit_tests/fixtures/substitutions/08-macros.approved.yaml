@@ -1,0 +1,58 @@
+substitutions:
+  display_scale: 1.5
+  a: 10
+  b: 4
+  c: 79
+  func: double
+  position:
+    x: 4
+    y: 3
+  $macros:
+    multiply:
+      parameters:
+        a: 3
+        b: 4
+      return: a*b
+    modulus:
+      parameters:
+        vec:
+          x: 0
+          y: 0
+      return: math.sqrt(vec.x*vec.x+vec.y*vec.y)
+    scale:
+      parameters:
+        x: 0
+        factor: null
+      return: (x * (display_scale if factor is none else factor)) | round | int
+    square:
+      parameters:
+        x: 0
+      return: x*x
+    double:
+      parameters:
+        x: 0
+      return: x*2
+    pin:
+      parameters:
+        number: 10
+        inverted: false
+      body: "#if number > 20\n${\n  {\n      \"number\": number,\n      \"inverted\"\
+        \ : inverted,\n      \"pullup\": true\n  }\n}\n#else\n${\n  {\n      \"number\"\
+        : number,\n      \"inverted\" : inverted,\n  }\n}\n#endif\n"
+testlist:
+  - Substitutions are evaluated before jinja, 20
+  - Distance = 5
+  - multiply(6,7) = 42
+  - multiply(2) = 8, because parameter b has a default value of 4
+  - multiply(a=5, b=7) = 35
+  - scale(100) = 150 because macro takes display_scale as default
+  - scale(100, 1.377892) = 138
+  - square(a) = 100
+  - double(b) = 8
+  - number: 10
+    inverted: true
+  - number: 10
+    inverted: false
+  - number: 22
+    inverted: false
+    pullup: true
