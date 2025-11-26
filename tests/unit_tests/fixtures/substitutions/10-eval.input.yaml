@@ -1,0 +1,30 @@
+substitutions:
+  width: 7
+  height: 8
+  template_expression: !literal ${ width * 3 }
+  template_data:
+    - width: 7
+    - width: 9
+  template_switch:
+    platform: gpio
+    id: switch${id}
+    pin: ${pin}
+    name: GPIO Switch on pin ${pin}
+
+  switches:
+    - id: 1
+      pin: 5
+    - id: 2
+      pin: 6
+
+test_list:
+  - ${ eval('${' + 'width * height}') }
+  - ${ eval(template_expression, template_data) } == [21, 27]
+  - ${ eval(template_expression, [2,3,4], 'width') } == [6, 9, 12]
+
+packages:
+  - switch: ${ eval(template_switch, switches) }
+
+switch:
+  - platform: restart
+    name: "Living Room Restart"

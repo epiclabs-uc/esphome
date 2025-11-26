@@ -1,0 +1,52 @@
+substitutions:
+  some_number: 42
+  some_string: Hello World
+  some_list:
+    - 1
+    - 2
+    - 3
+  some_dict:
+    key1: value1
+    key2: value2
+  another_dict:
+    key1: new_value1
+    key3: value3
+    key4: value4
+  nested:
+    list_in_dict: &id001
+      - item1
+      - item2
+    dict_in_list: &id002
+      subkey1: subvalue1
+      subkey2: subvalue2
+testlist:
+  - Hello World
+  - - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+  - key1: new_value1
+    key2: value2
+    key3: value3
+    key4: value4
+  - key1: value1
+    key3: value3
+    key4: value4
+    key2: value2
+  - - item1
+    - item2
+    - item3
+    - item4
+  - subkey1: subvalue1
+    subkey2: subvalue2
+    subkey3: subvalue3
+  - a: 1
+    b: 3
+    c: 4
+  - list_in_dict: *id001
+    dict_in_list: *id002
+    key1: new_value1
+    key3: value3
+    key4: value4
