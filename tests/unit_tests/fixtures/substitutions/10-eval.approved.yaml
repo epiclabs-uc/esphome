@@ -1,0 +1,32 @@
+switch:
+  - platform: gpio
+    id: switch1
+    pin: 5
+    name: GPIO Switch on pin 5
+  - platform: gpio
+    id: switch2
+    pin: 6
+    name: GPIO Switch on pin 6
+  - platform: restart
+    name: Living Room Restart
+substitutions:
+  width: 7
+  height: 8
+  template_expression: ${ width * 3 }
+  template_data:
+    - width: 7
+    - width: 9
+  switches:
+    - id: 1
+      pin: 5
+    - id: 2
+      pin: 6
+  template_switch:
+    platform: gpio
+    id: switch${id}
+    pin: ${pin}
+    name: GPIO Switch on pin ${pin}
+test_list:
+  - 56
+  - '[21, 27] == [21, 27]'
+  - '[6, 9, 12] == [6, 9, 12]'
