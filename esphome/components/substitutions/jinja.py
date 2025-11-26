@@ -11,6 +11,7 @@ from jinja2.nativetypes import NativeCodeGenerator, NativeTemplate
 from jinja2.runtime import missing as Missing
 import voluptuous as vol
 
+from esphome.config_helpers import merge_config
 import esphome.config_validation as cv
 from esphome.const import VALID_SUBSTITUTIONS_CHARACTERS
 from esphome.yaml_util import ESPHomeDataBase, make_data_base
@@ -95,6 +96,12 @@ JINJA_MACROS_SCHEMA = cv.Schema(
     extra=vol.PREVENT_EXTRA,
 )
 
+
+@jinja.pass_context
+def jinja_map(parent_ctx: dict, func: Any, iterable: Any) -> list:
+    return map(lambda x: func(parent_ctx, x), iterable)
+
+
 # SAFE_GLOBALS defines a allowlist of built-in functions or modules that are considered safe to expose
 # in Jinja templates or other sandboxed evaluation contexts. Only functions that do not allow
 # arbitrary code execution, file access, or other security risks are included.
@@ -112,6 +119,8 @@ SAFE_GLOBALS = {
     "ord": ord,
     "chr": chr,
     "len": len,
+    "map": jinja_map,
+    "merge": merge_config,
 }
 
 
@@ -222,7 +231,35 @@ class Jinja(jinja.Environment):
         self.add_extension("jinja2.ext.do")
         self.context_trace = {}
 
+        @jinja.pass_context
+        def jinja_eval(parent_ctx: dict, expr: Any, ctx=None, list_item="item"):
+            if isinstance(ctx, list):
+                return [jinja_eval(parent_ctx, expr, c, list_item) for c in ctx]
+            if ctx is not None and not isinstance(ctx, dict):
+                ctx = {list_item: ctx}
+            if isinstance(expr, dict):
+                expr = dict(expr)
+                for k, v in expr.items():
+                    new_k = jinja_eval(parent_ctx, k, ctx, list_item)
+                    v = jinja_eval(parent_ctx, v, ctx, list_item)
+                    if new_k != k:
+                        expr.pop(k)
+                        k = new_k
+                    expr[k] = v
+                return expr
+            if isinstance(expr, list):
+                return [jinja_eval(parent_ctx, v, ctx, list_item) for v in expr]
+            if not isinstance(expr, str) or not has_jinja(expr):
+                return expr
+            result = self.expand(
+                expr, {**parent_ctx, **(ctx or {})}, self.strict_undefined
+            )
+            if isinstance(expr, ESPHomeDataBase):
+                result = make_data_base(result, expr)
+            return result
+
         self.globals = {**self.globals, **SAFE_GLOBALS}
+        self.globals["eval"] = jinja_eval
 
     def load_macros(self, macro_definitions: dict):
         """
@@ -269,10 +306,20 @@ class Jinja(jinja.Environment):
                     # 4. Render the macro body with combined context
                     return template.render(render_context)
 
+                macro_func.is_macro = True
+
                 return macro_func
 
             # Register as a global in the environment
             self.globals[name] = make_macro_func()
+
+    def clear_macros(self):
+        """
+        Removes all previously loaded macros from the environment.
+        """
+        for name in list(self.globals.keys()):
+            if hasattr(self.globals[name], "is_macro"):
+                del self.globals[name]
 
     def expand(
         self,

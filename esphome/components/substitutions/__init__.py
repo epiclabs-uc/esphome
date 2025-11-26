@@ -407,6 +407,7 @@ def do_substitution_pass(
             substitutions[new] = substitutions[old]
             del substitutions[old]
 
+    jinja.clear_macros()
     errors: ErrList = []  # Collect undefined errors during substitution
     parent_context, substitutions = _push_context(substitutions, ContextVars(), errors)
 

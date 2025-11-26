@@ -1,0 +1,31 @@
+substitutions:
+  some_number: 42
+  some_string: Hello World
+  some_list:
+    - 1
+    - 2
+    - 3
+  some_dict:
+    key1: value1
+    key2: value2
+  another_dict:
+    key1: new_value1
+    key3: value3
+    key4: value4
+  nested:
+    list_in_dict:
+      - item1
+      - item2
+    dict_in_list:
+      subkey1: subvalue1
+      subkey2: subvalue2
+
+testlist:
+  - ${ merge(some_number, some_string) }
+  - ${ merge(some_list, [4,5,6]) }
+  - ${ merge(some_dict, another_dict) }
+  - ${ merge(another_dict, some_dict) }
+  - ${ merge(nested.list_in_dict, ["item3", "item4"]) }
+  - '${ merge(nested.dict_in_list, {"subkey3": "subvalue3"}) }'
+  - '${ merge({"a": 1, "b": 2}, {"b": 3, "c": 4}) }'
+  - ${ merge(nested, another_dict)}
