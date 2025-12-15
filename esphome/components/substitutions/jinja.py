@@ -9,6 +9,11 @@ from typing import Any
 import jinja2 as jinja
 from jinja2.nativetypes import NativeCodeGenerator, NativeTemplate
 from jinja2.runtime import missing as Missing
+import voluptuous as vol
+
+import esphome.config_validation as cv
+from esphome.const import VALID_SUBSTITUTIONS_CHARACTERS
+from esphome.yaml_util import ESPHomeDataBase, make_data_base
 
 TemplateError = jinja.TemplateError
 TemplateSyntaxError = jinja.TemplateSyntaxError
@@ -20,6 +25,10 @@ Undefined = jinja.Undefined
 Resolver = ".resolver"
 
 
+CONF_PARAMETERS = make_data_base("parameters")
+CONF_BODY = make_data_base("body")
+CONF_RETURN = "return"
+CONF_MACROS = "$macros"
 DETECT_JINJA = r"(\$\{)"
 detect_jinja_re = re.compile(
     r"<%.+?%>"  # Block form expression: <% ... %>
@@ -31,6 +40,60 @@ detect_jinja_re = re.compile(
 def has_jinja(st: str) -> bool:
     return detect_jinja_re.search(st) is not None
 
+
+def validate_identifier(value):
+    value = cv.string(value)
+    if not value:
+        raise cv.Invalid("Identifier name must not be empty")
+    if value[0].isdigit():
+        raise cv.Invalid("First character in an identifier cannot be a digit.")
+    for char in value:
+        if char not in VALID_SUBSTITUTIONS_CHARACTERS:
+            raise cv.Invalid(
+                f"Jinja identifier names must only consist of upper/lowercase characters, the underscore and numbers. The character '{char}' cannot be used"
+            )
+    return value
+
+
+def _fix_data_base(value: Any, source: Any) -> Any:
+    if isinstance(source, ESPHomeDataBase):
+        return make_data_base(value, source)
+    return value
+
+
+def _merge_return_into_body(macro_def):
+    """
+    Combines the value of "return" into the macro body
+    """
+    if CONF_PARAMETERS not in macro_def:
+        macro_def[CONF_PARAMETERS] = {}
+
+    if (ret := macro_def.pop(CONF_RETURN, None)) is not None:
+        body = macro_def.get(CONF_BODY, "")
+        # wrap the return value
+        ret_stmt = _fix_data_base(f"${{{ret}}}", ret)
+        macro_def[CONF_BODY] = (
+            _fix_data_base(f"{body}\n{ret_stmt}", body) if body else ret_stmt
+        )
+
+    return macro_def
+
+
+JINJA_MACROS_SCHEMA = cv.Schema(
+    {
+        validate_identifier: cv.All(
+            {
+                cv.Optional(str(CONF_PARAMETERS)): cv.ensure_schema(
+                    cv.Schema({validate_identifier: object})
+                ),
+                cv.Optional(str(CONF_BODY), default=""): cv.string,
+                cv.Optional(CONF_RETURN): cv.string,
+            },
+            _merge_return_into_body,
+        )
+    },
+    extra=vol.PREVENT_EXTRA,
+)
 
 # SAFE_GLOBALS defines a allowlist of built-in functions or modules that are considered safe to expose
 # in Jinja templates or other sandboxed evaluation contexts. Only functions that do not allow
@@ -161,7 +224,62 @@ class Jinja(jinja.Environment):
 
         self.globals = {**self.globals, **SAFE_GLOBALS}
 
-    def expand(self, content_str: str, context_vars: Mapping[str, Any]) -> Any:
+    def load_macros(self, macro_definitions: dict):
+        """
+        Creates Jinja macros out of a simplified yaml syntax.
+        Macros are registered as globals on this Environment, and
+        they see the calling template's context (unless shadowed by
+        their own parameters).
+        """
+
+        for name, macro in macro_definitions.items():
+            # parameters contains a dict of parameter names to default values
+            parameters = macro.get(CONF_PARAMETERS) or {}
+            body = macro[CONF_BODY]
+            template = self.from_string(body)
+
+            def make_macro_func(template=template, parameters=parameters):
+                param_names = tuple(parameters.keys())
+
+                @jinja.pass_context
+                def macro_func(context, *args, **kwargs):
+                    # 1. Start from the calling template's context
+                    #    `context` is a jinja2.runtime.Context
+                    render_context = dict(context)
+
+                    # 2. Compute the macro's own parameters (with defaults)
+                    call_params = dict(parameters)  # copy defaults
+
+                    #   2a. Positional args -> named parameters
+                    for i, arg in enumerate(args):
+                        if i < len(param_names):
+                            call_params[param_names[i]] = arg
+
+                    #   2b. Keyword args overwrite defaults (and positional)
+                    for k, v in kwargs.items():
+                        if k in call_params:
+                            call_params[k] = v
+                        else:
+                            # Allow extra kwargs as normal variables
+                            call_params[k] = v
+
+                    # 3. Overlay macro parameters on top of the calling context
+                    render_context.update(call_params)
+
+                    # 4. Render the macro body with combined context
+                    return template.render(render_context)
+
+                return macro_func
+
+            # Register as a global in the environment
+            self.globals[name] = make_macro_func()
+
+    def expand(
+        self,
+        content_str: str,
+        context_vars: Mapping[str, Any],
+        strict_undefined: bool = False,
+    ) -> Any:
         """
         Renders a string that may contain Jinja expressions or statements
         Returns the resulting value if all variables and expressions could be resolved.

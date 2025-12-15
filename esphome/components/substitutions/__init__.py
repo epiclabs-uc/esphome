@@ -15,7 +15,16 @@ from esphome.yaml_util import (
     make_data_base,
 )
 
-from .jinja import Jinja, JinjaError, Missing, Resolver, UndefinedError, has_jinja
+from .jinja import (
+    CONF_MACROS,
+    JINJA_MACROS_SCHEMA,
+    Jinja,
+    JinjaError,
+    Missing,
+    Resolver,
+    UndefinedError,
+    has_jinja,
+)
 
 CODEOWNERS = ["@esphome/core"]
 _LOGGER = logging.getLogger(__name__)
@@ -33,6 +42,8 @@ def validate_substitution_key(value: Any) -> str:
     value = cv.string(value)
     if not value:
         raise cv.Invalid("Substitution key must not be empty")
+    if value == CONF_MACROS:
+        return value
     if value[0] == "$":
         value = value[1:]
     if not value:
@@ -51,7 +62,8 @@ def validate_substitution_key(value: Any) -> str:
 
 CONFIG_SCHEMA = cv.Schema(
     {
-        validate_substitution_key: object,
+        cv.Optional(CONF_MACROS): JINJA_MACROS_SCHEMA,
+        cv.Optional(validate_substitution_key): object,
     }
 )
 
@@ -257,6 +269,12 @@ def _push_context(
     # Set up the resolver for use during substitution
     resolver_context[Resolver] = resolve
 
+    # Resolve macros first
+    resolve(CONF_MACROS)
+    if CONF_MACROS in context_vars:
+        macro_definitions = JINJA_MACROS_SCHEMA(context_vars[CONF_MACROS])
+        jinja.load_macros(macro_definitions)
+
     # Resolve all variables, recursively resolving dependencies as needed.
     # Each call to resolve() resolves that variable and any variables it depends on.
     while unresolved_vars:
@@ -391,6 +409,10 @@ def do_substitution_pass(
 
     errors: ErrList = []  # Collect undefined errors during substitution
     parent_context, substitutions = _push_context(substitutions, ContextVars(), errors)
+
+    if CONF_MACROS in substitutions:
+        macro_definitions = JINJA_MACROS_SCHEMA(substitutions[CONF_MACROS])
+        jinja.load_macros(macro_definitions)
 
     config = substitute(config, [], parent_context, False, errors)
 
