@@ -10,9 +10,10 @@ from jinja2.nativetypes import NativeCodeGenerator, NativeTemplate
 from jinja2.runtime import missing as Missing
 import voluptuous as vol
 
-from esphome.config_helpers import merge_config
+from esphome.config_helpers import Extend, Remove, merge_config
 import esphome.config_validation as cv
 from esphome.const import VALID_SUBSTITUTIONS_CHARACTERS
+from esphome.core import Lambda
 from esphome.yaml_util import ESPHomeDataBase, make_data_base
 
 # Re-exported for backward compatibility — consumers import has_jinja from here
@@ -240,11 +241,16 @@ class Jinja(jinja.Environment):
                 return expr
             if isinstance(expr, list):
                 return [jinja_eval(parent_ctx, v, ctx, list_item) for v in expr]
+            if isinstance(expr, Extend):
+                return Extend(jinja_eval(parent_ctx, expr.value, ctx, list_item))
+            if isinstance(expr, Remove):
+                return Remove(jinja_eval(parent_ctx, expr.value, ctx, list_item))
+            if isinstance(expr, Lambda):
+                return Lambda(jinja_eval(parent_ctx, expr.value, ctx, list_item))
+
             if not isinstance(expr, str) or not has_jinja(expr):
                 return expr
-            result = self.expand(
-                expr, {**parent_ctx, **(ctx or {})}, self.strict_undefined
-            )
+            result = self.expand(expr, {**parent_ctx, **(ctx or {})})
             if isinstance(expr, ESPHomeDataBase):
                 result = make_data_base(result, expr)
             return result
