@@ -76,7 +76,7 @@ class BTHomeSensor : public BTHomeMiThermometer {
 
     for (auto [obj_type, value, length] : decoder) {
       switch (obj_type) {
-        case 0x00: {  // packet id
+        case BTHomeObjectType::PACKET_ID: {  // packet id
           const uint8_t packet_id = value[0];
           if (this->last_packet_id_.has_value() && *this->last_packet_id_ == packet_id) {
             return reported;
@@ -84,7 +84,7 @@ class BTHomeSensor : public BTHomeMiThermometer {
           this->last_packet_id_ = packet_id;
           break;
         }
-        case 0x01: {  // battery percentage
+        case BTHomeObjectType::BATTERY_PCT: {  // battery percentage
           if (battery_level_count < NUM_BATTERY_LEVEL) {
             this->battery_level_[battery_level_count]->publish_state(value[0]);
             reported = true;
@@ -95,7 +95,7 @@ class BTHomeSensor : public BTHomeMiThermometer {
           }
           break;
         }
-        case 0x02: {  // temperature
+        case BTHomeObjectType::TEMPERATURE_C_X100: {
           if (temperature_count < NUM_TEMPERATURE) {
             const int16_t raw = encode_uint16(value[1], value[0]);
             this->temperature_[temperature_count]->publish_state(raw * 0.01f);
@@ -106,7 +106,7 @@ class BTHomeSensor : public BTHomeMiThermometer {
           }
           break;
         }
-        case 0x03: {  // humidity
+        case BTHomeObjectType::HUMIDITY_PCT_X100: {
           if (humidity_count < NUM_HUMIDITY) {
             const uint16_t raw = encode_uint16(value[1], value[0]);
             this->humidity_[humidity_count]->publish_state(raw * 0.01f);
@@ -117,7 +117,7 @@ class BTHomeSensor : public BTHomeMiThermometer {
           }
           break;
         }
-        case 0x0C: {  // battery voltage (mV)
+        case BTHomeObjectType::VOLTAGE_MV: {
           if (battery_voltage_count < NUM_BATTERY_VOLTAGE) {
             this->battery_voltage_[battery_voltage_count]->publish_state(value[0] * 0.001f);
             reported = true;

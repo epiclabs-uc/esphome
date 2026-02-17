@@ -7,106 +7,112 @@ namespace bthome_mithermometer {
 
 static const char *const TAG = "bthome_mithermometer";
 
-static bool get_bthome_value_length(uint8_t obj_type, size_t &value_length) {
+static size_t get_bthome_value_length(BTHomeObjectType obj_type) {
   switch (obj_type) {
-    case 0x00:  // packet id
-    case 0x01:  // battery
-    case 0x09:  // count (uint8)
-    case 0x0F:  // generic boolean
-    case 0x10:  // power (bool)
-    case 0x11:  // opening
-    case 0x15:  // battery low
-    case 0x16:  // battery charging
-    case 0x17:  // carbon monoxide
-    case 0x18:  // cold
-    case 0x19:  // connectivity
-    case 0x1A:  // door
-    case 0x1B:  // garage door
-    case 0x1C:  // gas
-    case 0x1D:  // heat
-    case 0x1E:  // light
-    case 0x1F:  // lock
-    case 0x20:  // moisture
-    case 0x21:  // motion
-    case 0x22:  // moving
-    case 0x23:  // occupancy
-    case 0x24:  // plug
-    case 0x25:  // presence
-    case 0x26:  // problem
-    case 0x27:  // running
-    case 0x28:  // safety
-    case 0x29:  // smoke
-    case 0x2A:  // sound
-    case 0x2B:  // tamper
-    case 0x2C:  // vibration
-    case 0x2D:  // water leak
-    case 0x2E:  // humidity (uint8)
-    case 0x2F:  // moisture (uint8)
-    case 0x46:  // UV index
-    case 0x57:  // temperature (sint8)
-    case 0x58:  // temperature (0.35C step)
-    case 0x59:  // count (sint8)
-    case 0x60:  // channel
-      value_length = 1;
-      return true;
-    case 0x02:  // temperature (0.01C)
-    case 0x03:  // humidity
-    case 0x06:  // mass (kg)
-    case 0x07:  // mass (lb)
-    case 0x08:  // dewpoint
-    case 0x0C:  // voltage (mV)
-    case 0x0D:  // pm2.5
-    case 0x0E:  // pm10
-    case 0x12:  // CO2
-    case 0x13:  // TVOC
-    case 0x14:  // moisture
-    case 0x3D:  // count (uint16)
-    case 0x3F:  // rotation
-    case 0x40:  // distance (mm)
-    case 0x41:  // distance (m)
-    case 0x43:  // current (A)
-    case 0x44:  // speed
-    case 0x45:  // temperature (0.1C)
-    case 0x47:  // volume (L)
-    case 0x48:  // volume (mL)
-    case 0x49:  // volume flow rate
-    case 0x4A:  // voltage (0.1V)
-    case 0x51:  // acceleration
-    case 0x52:  // gyroscope
-    case 0x56:  // conductivity
-    case 0x5A:  // count (sint16)
-    case 0x5D:  // current (sint16)
-    case 0x5E:  // direction
-    case 0x5F:  // precipitation
-    case 0x61:  // rotational speed
-    case 0xF0:  // button event
-      value_length = 2;
-      return true;
-    case 0x04:  // pressure
-    case 0x05:  // illuminance
-    case 0x0A:  // energy
-    case 0x0B:  // power
-    case 0x42:  // duration
-    case 0x4B:  // gas (uint24)
-    case 0xF2:  // firmware version (uint24)
-      value_length = 3;
-      return true;
-    case 0x3E:  // count (uint32)
-    case 0x4C:  // gas (uint32)
-    case 0x4D:  // energy (uint32)
-    case 0x4E:  // volume (uint32)
-    case 0x4F:  // water (uint32)
-    case 0x50:  // timestamp
-    case 0x55:  // volume storage
-    case 0x5B:  // count (sint32)
-    case 0x5C:  // power (sint32)
-    case 0x62:  // speed (sint32)
-    case 0x63:  // acceleration (sint32)
-    case 0xF1:  // firmware version (uint32)
-      value_length = 4;
-      return true;
+    // 1 Byte (uint8 / sint8)
+    case BTHomeObjectType::PACKET_ID:
+    case BTHomeObjectType::BATTERY_PCT:
+    case BTHomeObjectType::COUNT_U8:
+    case BTHomeObjectType::HUMIDITY_PCT_U8:
+    case BTHomeObjectType::MOISTURE_PCT_U8:
+    case BTHomeObjectType::UV_INDEX_X10:
+    case BTHomeObjectType::TEMPERATURE_C_I8:
+    case BTHomeObjectType::TEMPERATURE_C_I8_0_35:
+    case BTHomeObjectType::COUNT_I8:
+    case BTHomeObjectType::CHANNEL:
+
+    // Binary sensors:
+    case BTHomeObjectType::GENERIC_BOOLEAN:
+    case BTHomeObjectType::POWER_ON:
+    case BTHomeObjectType::OPENING_OPEN:
+    case BTHomeObjectType::BATTERY_LOW:
+    case BTHomeObjectType::BATTERY_CHARGING:
+    case BTHomeObjectType::CO_DETECTED:
+    case BTHomeObjectType::COLD_DETECTED:
+    case BTHomeObjectType::CONNECTIVITY_CONNECTED:
+    case BTHomeObjectType::DOOR_OPEN:
+    case BTHomeObjectType::GARAGE_DOOR_OPEN:
+    case BTHomeObjectType::GAS_DETECTED:
+    case BTHomeObjectType::HEAT_DETECTED:
+    case BTHomeObjectType::LIGHT_DETECTED:
+    case BTHomeObjectType::LOCK_UNLOCKED:
+    case BTHomeObjectType::MOISTURE_WET:
+    case BTHomeObjectType::MOTION_DETECTED:
+    case BTHomeObjectType::MOVING_ACTIVE:
+    case BTHomeObjectType::OCCUPANCY_DETECTED:
+    case BTHomeObjectType::PLUG_PLUGGED_IN:
+    case BTHomeObjectType::PRESENCE_HOME:
+    case BTHomeObjectType::PROBLEM_DETECTED:
+    case BTHomeObjectType::RUNNING_ACTIVE:
+    case BTHomeObjectType::SAFETY_SAFE:
+    case BTHomeObjectType::SMOKE_DETECTED:
+    case BTHomeObjectType::SOUND_DETECTED:
+    case BTHomeObjectType::TAMPER_ACTIVE:
+    case BTHomeObjectType::VIBRATION_DETECTED:
+    case BTHomeObjectType::WINDOW_OPEN:
+      return 1;
+
+    // 2 Bytes (uint16 / sint16)
+    case BTHomeObjectType::TEMPERATURE_C_X100:
+    case BTHomeObjectType::HUMIDITY_PCT_X100:
+    case BTHomeObjectType::MASS_KG_X100:
+    case BTHomeObjectType::MASS_LB_X100:
+    case BTHomeObjectType::DEWPOINT_C_X100:
+    case BTHomeObjectType::VOLTAGE_MV:
+    case BTHomeObjectType::PM25_UGM3:
+    case BTHomeObjectType::PM10_UGM3:
+    case BTHomeObjectType::CO2_PPM:
+    case BTHomeObjectType::TVOC_UGM3:
+    case BTHomeObjectType::MOISTURE_PCT_X100:
+    case BTHomeObjectType::COUNT_U16:
+    case BTHomeObjectType::ROTATION_DEG_X10:
+    case BTHomeObjectType::DISTANCE_MM:
+    case BTHomeObjectType::DISTANCE_M_X10:
+    case BTHomeObjectType::CURRENT_MA:
+    case BTHomeObjectType::SPEED_MS_X100:
+    case BTHomeObjectType::TEMPERATURE_C_X10:
+    case BTHomeObjectType::VOLUME_L_X10:
+    case BTHomeObjectType::VOLUME_ML:
+    case BTHomeObjectType::VOLUME_FLOW_M3HR_X1000:
+    case BTHomeObjectType::VOLTAGE_V_X10:
+    case BTHomeObjectType::ACCELERATION_MSS_X1000:
+    case BTHomeObjectType::GYROSCOPE_DEGS_X1000:
+    case BTHomeObjectType::CONDUCTIVITY_USCM:
+    case BTHomeObjectType::COUNT_I16:
+    case BTHomeObjectType::CURRENT_MA_I16:
+    case BTHomeObjectType::DIRECTION_DEG_X100:
+    case BTHomeObjectType::PRECIPITATION_MM_X10:
+    case BTHomeObjectType::ROTATIONAL_SPEED_RPM:
+      return 2;
+
+    // 3 Bytes (uint24)
+    case BTHomeObjectType::PRESSURE_PA:
+    case BTHomeObjectType::ILLUMINANCE_LX_X100:
+    case BTHomeObjectType::ENERGY_WH:
+    case BTHomeObjectType::POWER_W_X100:
+    case BTHomeObjectType::DURATION_S_X1000:
+    case BTHomeObjectType::GAS_M3_U24_X1000:
+      return 3;
+
+    // 4 Bytes (uint32 / sint32)
+    case BTHomeObjectType::COUNT_U32:
+    case BTHomeObjectType::GAS_M3_U32_X1000:
+    case BTHomeObjectType::ENERGY_WH_U32:
+    case BTHomeObjectType::VOLUME_ML_U32:
+    case BTHomeObjectType::WATER_ML:
+    case BTHomeObjectType::TIMESTAMP:
+    case BTHomeObjectType::VOLUME_STORAGE_ML:
+    case BTHomeObjectType::COUNT_I32:
+    case BTHomeObjectType::POWER_W_I32_X100:
+    case BTHomeObjectType::SPEED_UMS_I32:
+    case BTHomeObjectType::ACCELERATION_UMSS_I32:
+      return 4;
+
+    // Variable length or Unknown
+    case BTHomeObjectType::TEXT:
+    case BTHomeObjectType::RAW:
     default:
-      return false;
+      return 0;
   }
 }
 
@@ -130,11 +136,11 @@ void BTHomePayloadDecoder::Iterator::parse_next_() {
   }
 
   const uint8_t *start = ptr_;
-  uint8_t obj_type = *ptr_++;
+  BTHomeObjectType obj_type = static_cast<BTHomeObjectType>(*ptr_++);
   remaining_--;
 
   size_t value_length = 0;
-  if (obj_type == 0x53) {  // Text objects
+  if (obj_type == BTHomeObjectType::TEXT || obj_type == BTHomeObjectType::RAW) {  // variable-size objects
     if (remaining_ == 0) {
       ptr_ = nullptr;
       remaining_ = 0;
@@ -143,7 +149,8 @@ void BTHomePayloadDecoder::Iterator::parse_next_() {
     value_length = *ptr_++;
     remaining_--;
   } else {
-    if (!get_bthome_value_length(obj_type, value_length)) {
+    value_length = get_bthome_value_length(obj_type);
+    if (value_length == 0) {
       ptr_ = nullptr;  // Invalid type, stop iteration
       remaining_ = 0;
       return;
