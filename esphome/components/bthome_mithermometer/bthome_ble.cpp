@@ -15,7 +15,6 @@
 namespace esphome {
 namespace bthome_mithermometer {
 
-static const char *const TAG = "bthome_mithermometer";
 static constexpr size_t BTHOME_BINDKEY_SIZE = 16;
 static constexpr size_t BTHOME_NONCE_SIZE = 13;
 static constexpr size_t BTHOME_MIC_SIZE = 4;
@@ -202,10 +201,6 @@ void BTHomeMiThermometer::dump_config() {
     char bindkey_hex[format_hex_pretty_size(BTHOME_BINDKEY_SIZE)];
     ESP_LOGCONFIG(TAG, "  Bindkey: %s", format_hex_pretty_to(bindkey_hex, this->bindkey_, BTHOME_BINDKEY_SIZE, '.'));
   }
-  LOG_SENSOR("  ", "Temperature", this->temperature_);
-  LOG_SENSOR("  ", "Humidity", this->humidity_);
-  LOG_SENSOR("  ", "Battery Level", this->battery_level_);
-  LOG_SENSOR("  ", "Battery Voltage", this->battery_voltage_);
   LOG_SENSOR("  ", "Signal Strength", this->signal_strength_);
 }
 
@@ -367,51 +362,7 @@ bool BTHomeMiThermometer::handle_service_data_(const esp32_ble_tracker::ServiceD
     return false;
   }
 
-  bool reported = false;
-
-  BTHomePayloadIterator payload_iterator(payload, payload_size);
-
-  for (auto [obj_type, value, length] : payload_iterator) {
-    switch (obj_type) {
-      case 0x00: {  // packet id
-        const uint8_t packet_id = value[0];
-        if (this->last_packet_id_.has_value() && *this->last_packet_id_ == packet_id) {
-          return reported;
-        }
-        this->last_packet_id_ = packet_id;
-        break;
-      }
-      case 0x01:  // battery percentage
-        if (this->battery_level_ != nullptr) {
-          this->battery_level_->publish_state(value[0]);
-          reported = true;
-        }
-        break;
-      case 0x0C:  // battery voltage (mV)
-        if (this->battery_voltage_ != nullptr) {
-          const uint16_t raw = encode_uint16(value[1], value[0]);
-          this->battery_voltage_->publish_state(raw * 0.001f);
-          reported = true;
-        }
-        break;
-      case 0x02:  // temperature
-        if (this->temperature_ != nullptr) {
-          const int16_t raw = encode_uint16(value[1], value[0]);
-          this->temperature_->publish_state(raw * 0.01f);
-          reported = true;
-        }
-        break;
-      case 0x03:  // humidity
-        if (this->humidity_ != nullptr) {
-          const uint16_t raw = encode_uint16(value[1], value[0]);
-          this->humidity_->publish_state(raw * 0.01f);
-          reported = true;
-        }
-        break;
-      default:
-        break;
-    }
-  }
+  bool reported = on_payload(payload, payload_size);
   if (reported) {
     ESP_LOGD(TAG, "BTHome data%sfrom %s", is_trigger_based ? " (triggered) " : " ", device.address_str_to(addr_buf));
   }

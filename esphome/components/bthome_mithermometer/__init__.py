@@ -13,6 +13,7 @@ bthome_mithermometer_ns = cg.esphome_ns.namespace("bthome_mithermometer")
 BTHomeMiThermometer = bthome_mithermometer_ns.class_(
     "BTHomeMiThermometer", esp32_ble_tracker.ESPBTDeviceListener, cg.Component
 )
+BTHomeSensor = bthome_mithermometer_ns.class_("BTHomeSensor", BTHomeMiThermometer)
 
 
 def bthome_mithermometer_base_schema(extra_schema=None):
