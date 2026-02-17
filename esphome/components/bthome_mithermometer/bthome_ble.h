@@ -3,6 +3,7 @@
 #include "esphome/components/esp32_ble_tracker/esp32_ble_tracker.h"
 #include "esphome/components/sensor/sensor.h"
 #include "esphome/core/component.h"
+#include "bthome_decoder.h"
 
 #include <cstdint>
 #include <initializer_list>
@@ -14,37 +15,6 @@ namespace esphome {
 namespace bthome_mithermometer {
 
 static const char *const TAG = "bthome_mithermometer";
-
-struct BTHomeObject {
-  uint8_t type = 0;
-  const uint8_t *data = nullptr;
-  size_t length = 0;
-};
-
-class BTHomePayloadIterator {
- public:
-  class Iterator {
-   public:
-    Iterator(const uint8_t *ptr, size_t remaining);
-    BTHomeObject operator*() const;
-    Iterator &operator++();
-    bool operator!=(const Iterator &other) const;
-
-   private:
-    void parse_next();
-    const uint8_t *ptr_;
-    size_t remaining_;
-    BTHomeObject current_obj_{};
-  };
-  BTHomePayloadIterator(const uint8_t *payload, size_t size);
-
-  Iterator begin() const;
-  Iterator end() const;
-
- private:
-  const uint8_t *payload_;
-  size_t size_;
-};
 
 class BTHomeMiThermometer : public esp32_ble_tracker::ESPBTDeviceListener, public Component {
  public:
@@ -102,9 +72,9 @@ class BTHomeSensor : public BTHomeMiThermometer {
     uint8_t battery_level_count = 0;
     uint8_t battery_voltage_count = 0;
 
-    BTHomePayloadIterator payload_iterator(payload, size);
+    BTHomePayloadDecoder decoder(payload, size);
 
-    for (auto [obj_type, value, length] : payload_iterator) {
+    for (auto [obj_type, value, length] : decoder) {
       switch (obj_type) {
         case 0x00: {  // packet id
           const uint8_t packet_id = value[0];
@@ -119,6 +89,9 @@ class BTHomeSensor : public BTHomeMiThermometer {
             this->battery_level_[battery_level_count]->publish_state(value[0]);
             reported = true;
             battery_level_count++;
+          } else {
+            ESP_LOGV(TAG,
+                     "Ignored extra battery percentage data present in payload. Configure a sensor to retrieve it.");
           }
           break;
         }
@@ -128,6 +101,8 @@ class BTHomeSensor : public BTHomeMiThermometer {
             this->temperature_[temperature_count]->publish_state(raw * 0.01f);
             reported = true;
             temperature_count++;
+          } else {
+            ESP_LOGV(TAG, "Ignored extra temperature data present in payload. Configure a sensor to retrieve it.")
           }
           break;
         }
@@ -137,6 +112,8 @@ class BTHomeSensor : public BTHomeMiThermometer {
             this->humidity_[humidity_count]->publish_state(raw * 0.01f);
             reported = true;
             humidity_count++;
+          } else {
+            ESP_LOGV(TAG, "Ignored extra humidity data present in payload. Configure a sensor to retrieve it.")
           }
           break;
         }
@@ -145,6 +122,8 @@ class BTHomeSensor : public BTHomeMiThermometer {
             this->battery_voltage_[battery_voltage_count]->publish_state(value[0] * 0.001f);
             reported = true;
             battery_voltage_count++;
+          } else {
+            ESP_LOGV(TAG, "Ignored extra battery voltage data present in payload. Configure a sensor to retrieve it.")
           }
           break;
         }
