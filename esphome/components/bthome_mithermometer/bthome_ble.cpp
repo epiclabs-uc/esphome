@@ -134,6 +134,66 @@ static bool get_bthome_value_length(uint8_t obj_type, size_t &value_length) {
   }
 }
 
+BTHomePayloadIterator::Iterator::Iterator(const uint8_t *ptr, size_t remaining) : ptr_(ptr), remaining_(remaining) {
+  this->parse_next();
+}
+
+BTHomeObject BTHomePayloadIterator::Iterator::operator*() const { return current_obj_; }
+
+BTHomePayloadIterator::Iterator &BTHomePayloadIterator::Iterator::operator++() {
+  this->parse_next();
+  return *this;
+}
+
+bool BTHomePayloadIterator::Iterator::operator!=(const Iterator &other) const { return ptr_ != other.ptr_; }
+
+void BTHomePayloadIterator::Iterator::parse_next() {
+  if (remaining_ == 0) {
+    ptr_ = nullptr;
+    return;
+  }
+
+  const uint8_t *start = ptr_;
+  uint8_t obj_type = *ptr_++;
+  remaining_--;
+
+  size_t value_length = 0;
+  if (obj_type == 0x53) {  // Text objects
+    if (remaining_ == 0) {
+      ptr_ = nullptr;
+      remaining_ = 0;
+      return;
+    }
+    value_length = *ptr_++;
+    remaining_--;
+  } else {
+    if (!get_bthome_value_length(obj_type, value_length)) {
+      ptr_ = nullptr;  // Invalid type, stop iteration
+      remaining_ = 0;
+      return;
+    }
+  }
+
+  if (remaining_ < value_length || value_length == 0) {
+    ptr_ = nullptr;
+    remaining_ = 0;
+    return;
+  }
+
+  if (obj_type < current_obj_.type) {
+    ESP_LOGVV(TAG, "BTHome objects not in ascending order");
+  }
+
+  current_obj_ = {obj_type, ptr_, value_length};
+  ptr_ += value_length;
+  remaining_ -= value_length;
+}
+
+BTHomePayloadIterator::BTHomePayloadIterator(const uint8_t *payload, size_t size) : payload_(payload), size_(size) {}
+
+BTHomePayloadIterator::Iterator BTHomePayloadIterator::begin() const { return Iterator(payload_, size_); }
+BTHomePayloadIterator::Iterator BTHomePayloadIterator::end() const { return Iterator(nullptr, 0); }
+
 void BTHomeMiThermometer::dump_config() {
   char addr_buf[MAC_ADDRESS_PRETTY_BUFFER_SIZE];
   ESP_LOGCONFIG(TAG, "BTHome MiThermometer");
@@ -308,43 +368,10 @@ bool BTHomeMiThermometer::handle_service_data_(const esp32_ble_tracker::ServiceD
   }
 
   bool reported = false;
-  size_t offset = 0;
-  uint8_t last_type = 0;
 
-  while (offset < payload_size) {
-    const uint8_t obj_type = payload[offset++];
-    size_t value_length = 0;
-    bool has_length_byte = obj_type == 0x53;  // text objects include explicit length
+  BTHomePayloadIterator payload_iterator(payload, payload_size);
 
-    if (has_length_byte) {
-      if (offset >= payload_size) {
-        break;
-      }
-      value_length = payload[offset++];
-    } else {
-      if (!get_bthome_value_length(obj_type, value_length)) {
-        ESP_LOGVV(TAG, "Unknown BTHome object 0x%02X", obj_type);
-        break;
-      }
-    }
-
-    if (value_length == 0) {
-      break;
-    }
-
-    if (offset + value_length > payload_size) {
-      ESP_LOGVV(TAG, "BTHome object length exceeds payload");
-      break;
-    }
-
-    const uint8_t *value = &payload[offset];
-    offset += value_length;
-
-    if (obj_type < last_type) {
-      ESP_LOGVV(TAG, "BTHome objects not in ascending order");
-    }
-    last_type = obj_type;
-
+  for (auto [obj_type, value, length] : payload_iterator) {
     switch (obj_type) {
       case 0x00: {  // packet id
         const uint8_t packet_id = value[0];
@@ -354,42 +381,37 @@ bool BTHomeMiThermometer::handle_service_data_(const esp32_ble_tracker::ServiceD
         this->last_packet_id_ = packet_id;
         break;
       }
-      case 0x01: {  // battery percentage
+      case 0x01:  // battery percentage
         if (this->battery_level_ != nullptr) {
           this->battery_level_->publish_state(value[0]);
           reported = true;
         }
         break;
-      }
-      case 0x0C: {  // battery voltage (mV)
+      case 0x0C:  // battery voltage (mV)
         if (this->battery_voltage_ != nullptr) {
           const uint16_t raw = encode_uint16(value[1], value[0]);
           this->battery_voltage_->publish_state(raw * 0.001f);
           reported = true;
         }
         break;
-      }
-      case 0x02: {  // temperature
+      case 0x02:  // temperature
         if (this->temperature_ != nullptr) {
           const int16_t raw = encode_uint16(value[1], value[0]);
           this->temperature_->publish_state(raw * 0.01f);
           reported = true;
         }
         break;
-      }
-      case 0x03: {  // humidity
+      case 0x03:  // humidity
         if (this->humidity_ != nullptr) {
           const uint16_t raw = encode_uint16(value[1], value[0]);
           this->humidity_->publish_state(raw * 0.01f);
           reported = true;
         }
         break;
-      }
       default:
         break;
     }
   }
-
   if (reported) {
     ESP_LOGD(TAG, "BTHome data%sfrom %s", is_trigger_based ? " (triggered) " : " ", device.address_str_to(addr_buf));
   }

@@ -13,6 +13,37 @@
 namespace esphome {
 namespace bthome_mithermometer {
 
+struct BTHomeObject {
+  uint8_t type = 0;
+  const uint8_t *data = nullptr;
+  size_t length = 0;
+};
+
+class BTHomePayloadIterator {
+ public:
+  class Iterator {
+   public:
+    Iterator(const uint8_t *ptr, size_t remaining);
+    BTHomeObject operator*() const;
+    Iterator &operator++();
+    bool operator!=(const Iterator &other) const;
+
+   private:
+    void parse_next();
+    const uint8_t *ptr_;
+    size_t remaining_;
+    BTHomeObject current_obj_{};
+  };
+  BTHomePayloadIterator(const uint8_t *payload, size_t size);
+
+  Iterator begin() const;
+  Iterator end() const;
+
+ private:
+  const uint8_t *payload_;
+  size_t size_;
+};
+
 class BTHomeMiThermometer : public esp32_ble_tracker::ESPBTDeviceListener, public Component {
  public:
   void set_address(uint64_t address) { this->address_ = address; }
