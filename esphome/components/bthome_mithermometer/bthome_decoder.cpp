@@ -116,6 +116,127 @@ static size_t get_bthome_value_length(BTHomeObjectType obj_type) {
   }
 }
 
+static uint16_t read_uint16_le(const uint8_t *data) { return (uint16_t) data[0] | ((uint16_t) data[1] << 8); }
+
+static uint32_t read_uint24_le(const uint8_t *data) {
+  return (uint32_t) data[0] | ((uint32_t) data[1] << 8) | ((uint32_t) data[2] << 16);
+}
+
+static uint32_t read_uint32_le(const uint8_t *data) {
+  return (uint32_t) data[0] | ((uint32_t) data[1] << 8) | ((uint32_t) data[2] << 16) | ((uint32_t) data[3] << 24);
+}
+
+static int16_t read_sint16_le(const uint8_t *data) { return (int16_t) read_uint16_le(data); }
+
+static int32_t read_sint32_le(const uint8_t *data) { return (int32_t) read_uint32_le(data); }
+
+float BTHomeObject::scaling_factor() const {
+  switch (type) {
+    // 0.001f scaling
+    case BTHomeObjectType::ENERGY_WH:
+    case BTHomeObjectType::VOLTAGE_MV:
+    case BTHomeObjectType::DURATION_S_X1000:
+    case BTHomeObjectType::CURRENT_MA:
+    case BTHomeObjectType::VOLUME_FLOW_M3HR_X1000:
+    case BTHomeObjectType::GAS_M3_U24_X1000:
+    case BTHomeObjectType::GAS_M3_U32_X1000:
+    case BTHomeObjectType::ENERGY_WH_U32:
+    case BTHomeObjectType::VOLUME_ML_U32:
+    case BTHomeObjectType::WATER_ML:
+    case BTHomeObjectType::ACCELERATION_MSS_X1000:
+    case BTHomeObjectType::GYROSCOPE_DEGS_X1000:
+    case BTHomeObjectType::VOLUME_STORAGE_ML:
+    case BTHomeObjectType::CURRENT_MA_I16:
+      return 0.001f;
+
+    // 0.01f scaling
+    case BTHomeObjectType::TEMPERATURE_C_X100:
+    case BTHomeObjectType::HUMIDITY_PCT_X100:
+    case BTHomeObjectType::PRESSURE_PA:
+    case BTHomeObjectType::ILLUMINANCE_LX_X100:
+    case BTHomeObjectType::MASS_KG_X100:
+    case BTHomeObjectType::MASS_LB_X100:
+    case BTHomeObjectType::DEWPOINT_C_X100:
+    case BTHomeObjectType::POWER_W_X100:
+    case BTHomeObjectType::MOISTURE_PCT_X100:
+    case BTHomeObjectType::SPEED_MS_X100:
+    case BTHomeObjectType::POWER_W_I32_X100:
+    case BTHomeObjectType::DIRECTION_DEG_X100:
+      return 0.01f;
+
+    // 0.1f scaling
+    case BTHomeObjectType::ROTATION_DEG_X10:
+    case BTHomeObjectType::TEMPERATURE_C_X10:
+    case BTHomeObjectType::UV_INDEX_X10:
+    case BTHomeObjectType::VOLUME_L_X10:
+    case BTHomeObjectType::VOLTAGE_V_X10:
+    case BTHomeObjectType::PRECIPITATION_MM_X10:
+      return 0.1f;
+
+    // Unique scaling
+    case BTHomeObjectType::TEMPERATURE_C_I8_0_35:
+      return 0.35f;
+
+    default:
+      return 1.0f;
+  }
+}
+
+bool BTHomeObject::is_signed() const {
+  switch (type) {
+    case BTHomeObjectType::TEMPERATURE_C_X100:
+    case BTHomeObjectType::DEWPOINT_C_X100:
+    case BTHomeObjectType::ROTATION_DEG_X10:
+    case BTHomeObjectType::TEMPERATURE_C_X10:
+    case BTHomeObjectType::TEMPERATURE_C_I8:
+    case BTHomeObjectType::TEMPERATURE_C_I8_0_35:
+    case BTHomeObjectType::COUNT_I8:
+    case BTHomeObjectType::COUNT_I16:
+    case BTHomeObjectType::COUNT_I32:
+    case BTHomeObjectType::POWER_W_I32_X100:
+    case BTHomeObjectType::CURRENT_MA_I16:
+      return true;
+    default:
+      return false;
+  }
+}
+
+uint32_t BTHomeObject::as_uint() const {
+  switch (length) {
+    case 1:
+      return data[0];
+    case 2:
+      return read_uint16_le(data);
+    case 3:
+      return read_uint24_le(data);
+    case 4:
+      return read_uint32_le(data);
+    default:
+      return 0.0f;
+  }
+}
+
+int32_t BTHomeObject::as_int() const {
+  switch (length) {
+    case 1:
+      return data[0];
+    case 2:
+      return read_uint16_le(data);
+    case 3:
+      return read_uint24_le(data);
+    case 4:
+      return read_uint32_le(data);
+    default:
+      return 0.0f;
+  }
+}
+
+float BTHomeObject::as_float() const { return scaling_factor() * (is_signed() ? float(as_int()) : float(as_uint())); }
+
+bool BTHomeObject::as_bool() const { return as_uint() != 0; }
+
+std::string_view BTHomeObject::as_string() const { return std::string_view((const char *) data, length); }
+
 BTHomePayloadDecoder::Iterator::Iterator(const uint8_t *ptr, size_t remaining) : ptr_(ptr), remaining_(remaining) {
   this->parse_next_();
 }

@@ -74,10 +74,10 @@ class BTHomeSensor : public BTHomeMiThermometer {
 
     BTHomePayloadDecoder decoder(payload, size);
 
-    for (auto [obj_type, value, length] : decoder) {
-      switch (obj_type) {
+    for (const BTHomeObject &obj : decoder) {
+      switch (obj.type) {
         case BTHomeObjectType::PACKET_ID: {  // packet id
-          const uint8_t packet_id = value[0];
+          const uint8_t packet_id = obj.as_uint();
           if (this->last_packet_id_.has_value() && *this->last_packet_id_ == packet_id) {
             return reported;
           }
@@ -86,7 +86,7 @@ class BTHomeSensor : public BTHomeMiThermometer {
         }
         case BTHomeObjectType::BATTERY_PCT: {  // battery percentage
           if (battery_level_count < NUM_BATTERY_LEVEL) {
-            this->battery_level_[battery_level_count]->publish_state(value[0]);
+            this->battery_level_[battery_level_count]->publish_state(obj.as_float());
             reported = true;
             battery_level_count++;
           } else {
@@ -97,8 +97,7 @@ class BTHomeSensor : public BTHomeMiThermometer {
         }
         case BTHomeObjectType::TEMPERATURE_C_X100: {
           if (temperature_count < NUM_TEMPERATURE) {
-            const int16_t raw = encode_uint16(value[1], value[0]);
-            this->temperature_[temperature_count]->publish_state(raw * 0.01f);
+            this->temperature_[temperature_count]->publish_state(obj.as_float());
             reported = true;
             temperature_count++;
           } else {
@@ -108,8 +107,7 @@ class BTHomeSensor : public BTHomeMiThermometer {
         }
         case BTHomeObjectType::HUMIDITY_PCT_X100: {
           if (humidity_count < NUM_HUMIDITY) {
-            const uint16_t raw = encode_uint16(value[1], value[0]);
-            this->humidity_[humidity_count]->publish_state(raw * 0.01f);
+            this->humidity_[humidity_count]->publish_state(obj.as_float());
             reported = true;
             humidity_count++;
           } else {
@@ -119,7 +117,7 @@ class BTHomeSensor : public BTHomeMiThermometer {
         }
         case BTHomeObjectType::VOLTAGE_MV: {
           if (battery_voltage_count < NUM_BATTERY_VOLTAGE) {
-            this->battery_voltage_[battery_voltage_count]->publish_state(value[0] * 0.001f);
+            this->battery_voltage_[battery_voltage_count]->publish_state(obj.as_float());
             reported = true;
             battery_voltage_count++;
           } else {

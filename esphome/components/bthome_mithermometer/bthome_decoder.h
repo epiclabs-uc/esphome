@@ -1,6 +1,8 @@
 #pragma once
 #include <cstdint>
 #include <cstddef>
+#include <string_view>
+
 namespace esphome {
 namespace bthome_mithermometer {
 
@@ -102,6 +104,13 @@ struct BTHomeObject {
   BTHomeObjectType type = BTHomeObjectType::PACKET_ID;
   const uint8_t *data = nullptr;
   size_t length = 0;
+  float scaling_factor() const;
+  bool is_signed() const;
+  uint32_t as_uint() const;
+  int32_t as_int() const;
+  float as_float() const;
+  bool as_bool() const;
+  std::string_view as_string() const;
 };
 
 class BTHomePayloadDecoder {
