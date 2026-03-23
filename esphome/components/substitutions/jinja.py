@@ -275,6 +275,8 @@ class Jinja(jinja.Environment):
         their own parameters).
         """
 
+        macro_definitions = JINJA_MACROS_SCHEMA(macro_definitions)
+
         for name, macro in macro_definitions.items():
             # parameters contains a dict of parameter names to default values
             parameters = macro.get(CONF_PARAMETERS) or {}
