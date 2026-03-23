@@ -7,12 +7,13 @@ substitutions:
   position:
     x: 4
     y: 3
+  double_a: ${double(a)}
 
   $macros:
     multiply:
       parameters:
         a: 3
-        b: 4
+        b: ${b}
       return: a*b
     modulus:
       parameters:
@@ -23,7 +24,7 @@ substitutions:
     scale:
       parameters:
         x: 0
-        factor: null
+        factor:
       return: (x * (display_scale if factor is none else factor)) | round | int
     square:
       parameters:

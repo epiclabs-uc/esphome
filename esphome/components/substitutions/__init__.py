@@ -21,7 +21,6 @@ from esphome.yaml_util import (
 
 from .jinja import (
     CONF_MACROS,
-    JINJA_MACROS_SCHEMA,
     Jinja,
     JinjaError,
     Missing,
@@ -95,7 +94,7 @@ def validate_substitution_key(value: Any) -> str:
 
 CONFIG_SCHEMA = cv.Schema(
     {
-        cv.Optional(CONF_MACROS): JINJA_MACROS_SCHEMA,
+        cv.Optional(CONF_MACROS): object,
         cv.Optional(validate_substitution_key): object,
     }
 )
@@ -315,8 +314,7 @@ def _push_context(
 
     # Resolve macros first
     resolve(CONF_MACROS)
-    if CONF_MACROS in context_vars:
-        macro_definitions = JINJA_MACROS_SCHEMA(context_vars[CONF_MACROS])
+    if macro_definitions := context_vars.get(CONF_MACROS):
         jinja.load_macros(macro_definitions)
 
     # Resolve all variables, recursively resolving dependencies as needed.
@@ -531,10 +529,6 @@ def do_substitution_pass(
     jinja.clear_macros()
     errors: ErrList = []  # Collect undefined errors during substitution
     parent_context, substitutions = _push_context(substitutions, ContextVars(), errors)
-
-    if CONF_MACROS in substitutions:
-        macro_definitions = JINJA_MACROS_SCHEMA(substitutions[CONF_MACROS])
-        jinja.load_macros(macro_definitions)
 
     config = substitute(config, [], parent_context, False, errors)
 

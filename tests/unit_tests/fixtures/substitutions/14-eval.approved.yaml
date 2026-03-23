@@ -1,14 +1,3 @@
-switch:
-  - platform: gpio
-    id: switch1
-    pin: 5
-    name: GPIO Switch on pin 5
-  - platform: gpio
-    id: switch2
-    pin: 6
-    name: GPIO Switch on pin 6
-  - platform: restart
-    name: Living Room Restart
 substitutions:
   width: 7
   height: 8
@@ -30,3 +19,14 @@ test_list:
   - 56
   - '[21, 27] == [21, 27]'
   - '[6, 9, 12] == [6, 9, 12]'
+switch:
+  - platform: gpio
+    id: switch1
+    pin: 5
+    name: GPIO Switch on pin 5
+  - platform: gpio
+    id: switch2
+    pin: 6
+    name: GPIO Switch on pin 6
+  - platform: restart
+    name: Living Room Restart
