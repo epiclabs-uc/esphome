@@ -8,6 +8,7 @@ from typing import Any
 from esphome import git, yaml_util
 from esphome.components.substitutions import (
     ContextVars,
+    format_config_path,
     push_context,
     resolve_include,
     substitute,
@@ -38,83 +39,6 @@ _LOGGER = logging.getLogger(__name__)
 DOMAIN = CONF_PACKAGES
 # Guard against infinite include chains (e.g. A includes B includes A).
 MAX_INCLUDE_DEPTH = 20
-
-
-def _path_doc(item: object) -> str | None:
-    """Return the source document name if *item* carries location info."""
-    if isinstance(item, yaml_util.ESPHomeDataBase):
-        r = item.esp_range
-        if r is not None:
-            return r.start_mark.document
-    return None
-
-
-def format_include_stack(path: list[str | int], current_obj: object) -> str:
-    """Build a human-readable include stack from a packages path.
-
-    Each YAML key in *path* that carries an ESPHomeDataBase ``esp_range``
-    reveals which file it came from.  When the source document changes between
-    consecutive such keys, that is an include boundary.  The path is split
-    into per-file frames and formatted innermost-first, e.g.::
-
-        In: packages->_roam_ in common/package/wifi.yaml 26:10
-          Included from packages->_wifi_ in common/sonoff_S26.yaml 44:2
-          Included from packages->device in Garland-Hall.yaml 11:2
-
-    The innermost ``In:`` line uses the location from *current_obj* when
-    available (the value that triggered the error) for extra precision.
-    """
-    # Split path into frames: start a new frame each time the source document
-    # changes among the path items that carry location info.
-    frames: list[tuple[list, str]] = []  # (path_segment, location_str)
-    current_doc: str | None = None
-    frame_start = 0
-    last_key_idx = -1
-    last_key_loc = ""
-
-    for i, item in enumerate(path):
-        doc = _path_doc(item)
-        if doc is None:
-            continue
-        loc = str(item.esp_range.start_mark)
-        if doc != current_doc:
-            if current_doc is not None:
-                frames.append(
-                    (list(path[frame_start : last_key_idx + 1]), last_key_loc)
-                )
-                frame_start = last_key_idx + 1
-            current_doc = doc
-        last_key_idx = i
-        last_key_loc = loc
-
-    if current_doc is not None:
-        frames.append((list(path[frame_start : last_key_idx + 1]), last_key_loc))
-
-    def fmt_path(seg: list) -> str:
-        return "->".join(str(s) for s in seg)
-
-    if not frames:
-        # No location info in path — use current_obj if possible
-        location = ""
-        if isinstance(current_obj, yaml_util.ESPHomeDataBase):
-            r = getattr(current_obj, "esp_range", None)
-            if r is not None:
-                location = f" in {r.start_mark}"
-        return f"In: {fmt_path(path)}{location}"
-
-    # For the innermost "In:" line prefer the current object's location
-    # (the value that triggered the error, usually more precise than the key).
-    inner_seg, inner_loc = frames[-1]
-    if isinstance(current_obj, yaml_util.ESPHomeDataBase):
-        r = getattr(current_obj, "esp_range", None)
-        if r is not None:
-            inner_loc = str(r.start_mark)
-
-    lines = [f"In: {fmt_path(inner_seg)} in {inner_loc}"]
-    for seg, loc in reversed(frames[:-1]):
-        lines.append(f"  Included from {fmt_path(seg)} in {loc}")
-
-    return "\n".join(lines)
 
 
 def is_remote_package(package_config: dict) -> bool:
@@ -458,7 +382,7 @@ def _substitute_package_definition(
                 strict_undefined=True,
             )
         except UndefinedError as err:
-            stack = format_include_stack(path, package_config)
+            stack = format_config_path(path, package_config)
             raise cv.Invalid(
                 f"Undefined variable in package definition: {err.message}.\n{stack}"
             ) from err
