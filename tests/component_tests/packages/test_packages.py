@@ -8,12 +8,13 @@ import pytest
 
 from esphome.components.packages import (
     CONFIG_SCHEMA,
+    _substitute_package_definition,
     _walk_packages,
     do_packages_pass,
     is_package_definition,
     merge_packages,
 )
-from esphome.components.substitutions import do_substitution_pass
+from esphome.components.substitutions import ContextVars, do_substitution_pass
 import esphome.config as config_module
 from esphome.config import resolve_extend_remove
 from esphome.config_helpers import Extend, Remove
@@ -42,9 +43,9 @@ from esphome.const import (
     CONF_VARS,
     CONF_WIFI,
 )
-from esphome.core import CORE
+from esphome.core import CORE, DocumentLocation, DocumentRange
 from esphome.util import OrderedDict
-from esphome.yaml_util import IncludeFile, add_context
+from esphome.yaml_util import ESPHomeDataBase, IncludeFile, add_context, make_data_base
 
 # Test strings
 TEST_DEVICE_NAME = "test_device_name"
@@ -1405,3 +1406,52 @@ def test_raw_config_contains_merged_esphome_from_package(tmp_path) -> None:
         "CORE.raw_config should contain esphome section after package merge"
     )
     assert CORE.raw_config[CONF_ESPHOME][CONF_NAME] == TEST_DEVICE_NAME
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _located(value, doc: str, line: int, col: int):
+    """Return *value* wrapped with a fake ESPHomeDataBase source location."""
+    loc = DocumentLocation(doc, line, col)
+    obj = make_data_base(value)
+    if isinstance(obj, ESPHomeDataBase):
+        obj._esp_range = DocumentRange(loc, loc)
+    return obj
+
+
+# ---------------------------------------------------------------------------
+# _substitute_package_definition
+# ---------------------------------------------------------------------------
+
+
+class TestSubstitutePackageDefinition:
+    def test_local_dict_returned_unchanged(self):
+        """A plain local config dict is not substituted and is returned as-is."""
+        pkg = {CONF_WIFI: {CONF_SSID: "test"}}
+        result = _substitute_package_definition(pkg, ContextVars(), [])
+        assert result is pkg
+
+    def test_string_resolved_with_context(self):
+        """A string package definition has its variables substituted."""
+        ctx = ContextVars({"variant": "esp32"})
+        result = _substitute_package_definition("device-${variant}.yaml", ctx, [])
+        assert result == "device-esp32.yaml"
+
+    def test_undefined_variable_error_shows_include_chain(self):
+        """With a multi-level path the error lists each include boundary."""
+        path = [
+            "packages",
+            _located("device", "root.yaml", 10, 2),
+            "packages",
+            _located("inner", "hardware.yaml", 3, 2),
+        ]
+        with pytest.raises(cv.Invalid) as exc_info:
+            _substitute_package_definition("${undefined_var}", ContextVars(), path)
+        msg = str(exc_info.value)
+        assert "In:" in msg
+        assert "Included from" in msg
+        assert "root.yaml" in msg
+        assert "hardware.yaml" in msg
