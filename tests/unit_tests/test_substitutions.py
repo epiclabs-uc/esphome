@@ -658,7 +658,7 @@ def test_resolve_package_max_depth_exceeded(tmp_path: Path) -> None:
         cv.Invalid,
         match=f"Maximum include nesting depth \\({MAX_INCLUDE_DEPTH}\\) exceeded",
     ):
-        processor.resolve_package(package_config, substitutions.ContextVars())
+        processor.resolve_package(package_config, substitutions.ContextVars(), [])
 
 
 def test_include_filename_substitution_undefined_var(tmp_path: Path) -> None:
@@ -693,4 +693,4 @@ def test_resolve_package_undefined_var_in_include_filename(tmp_path: Path) -> No
     )
     processor = _PackageProcessor({}, None, False)
     with pytest.raises(cv.Invalid, match="unresolved substitutions"):
-        processor.resolve_package(package_config, substitutions.ContextVars())
+        processor.resolve_package(package_config, substitutions.ContextVars(), [])
