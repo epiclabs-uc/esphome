@@ -8,6 +8,7 @@ from typing import Any
 from esphome import git, yaml_util
 from esphome.components.substitutions import (
     ContextVars,
+    format_config_path,
     push_context,
     resolve_include,
     substitute,
@@ -278,8 +279,9 @@ def _process_remote_package(config: dict, skip_update: bool = False) -> dict:
 
 def _walk_package_dict(
     packages: dict,
-    callback: Callable[[dict, ContextVars | None], dict],
+    callback: Callable[[dict, ContextVars | None, list], dict],
     context: ContextVars | None,
+    path: list[str | int],
 ) -> cv.Invalid | None:
     """Iterate a packages dict in reverse priority order, invoking callback on each entry.
 
@@ -288,7 +290,9 @@ def _walk_package_dict(
     for package_name, package_config in reversed(packages.items()):
         with cv.prepend_path(package_name):
             try:
-                packages[package_name] = callback(package_config, context)
+                packages[package_name] = callback(
+                    package_config, context, path + [package_name]
+                )
             except cv.Invalid as err:
                 return err
     return None
@@ -296,20 +300,22 @@ def _walk_package_dict(
 
 def _walk_package_list(
     packages: list,
-    callback: Callable[[dict, ContextVars | None], dict],
+    callback: Callable[[dict, ContextVars | None, list], dict],
     context: ContextVars | None,
+    path: list[str | int],
 ) -> None:
     """Iterate a packages list in reverse priority order, invoking callback on each entry."""
     for idx in reversed(range(len(packages))):
         with cv.prepend_path(idx):
-            packages[idx] = callback(packages[idx], context)
+            packages[idx] = callback(packages[idx], context, path + [idx])
 
 
 def _walk_packages(
     config: dict,
-    callback: Callable[[dict, ContextVars | None], dict],
+    callback: Callable[[dict, ContextVars | None, list], dict],
     context: ContextVars | None = None,
     validate_deprecated: bool = True,
+    path: list[str | int] | None = None,
 ) -> dict:
     """Walks the packages structure in priority order, invoking ``callback`` on each package definition found.
 
@@ -320,19 +326,24 @@ def _walk_packages(
     if CONF_PACKAGES not in config:
         return config
     packages = config[CONF_PACKAGES]
+    packages_path = (path or []) + [CONF_PACKAGES]
 
     with cv.prepend_path(CONF_PACKAGES):
         if isinstance(packages, yaml_util.IncludeFile):
             # If the packages key is an IncludeFile, resolve it first before processing.
-            packages, _ = resolve_include(packages, [], context, strict_undefined=False)
+            packages, _ = resolve_include(
+                packages, packages_path, context, strict_undefined=False
+            )
         if not isinstance(packages, (dict, list)):
             raise cv.Invalid(
                 f"Packages must be a key to value mapping or list, got {type(packages)} instead"
             )
 
         if not isinstance(packages, dict):
-            _walk_package_list(packages, callback, context)
-        elif (result := _walk_package_dict(packages, callback, context)) is not None:
+            _walk_package_list(packages, callback, context, packages_path)
+        elif (
+            result := _walk_package_dict(packages, callback, context, packages_path)
+        ) is not None:
             if not validate_deprecated or any(
                 is_package_definition(v) for v in packages.values()
             ):
@@ -341,14 +352,18 @@ def _walk_packages(
             # This block can be removed once the single-package
             # deprecation period (2026.7.0) is over.
             config[CONF_PACKAGES] = [packages]
-            return _walk_packages(deprecate_single_package(config), callback, context)
+            return _walk_packages(
+                deprecate_single_package(config), callback, context, path=path
+            )
 
     config[CONF_PACKAGES] = packages
     return config
 
 
 def _substitute_package_definition(
-    package_config: dict | str, context_vars: ContextVars | None
+    package_config: dict | str,
+    context_vars: ContextVars | None,
+    path: list[str | int],
 ) -> dict | str:
     """Substitute variables in a package definition string or remote package dict.
 
@@ -362,19 +377,14 @@ def _substitute_package_definition(
         try:
             package_config = substitute(
                 item=package_config,
-                path=[],
+                path=path,
                 parent_context=context_vars or ContextVars(),
                 strict_undefined=True,
             )
         except UndefinedError as err:
-            location: str = ""
-            if (
-                isinstance(package_config, yaml_util.ESPHomeDataBase)
-                and package_config.esp_range is not None
-            ):
-                location = f" (in {str(package_config.esp_range.start_mark)})"
+            stack = format_config_path(path, package_config)
             raise cv.Invalid(
-                f"Undefined variable in package definition: {err.message}{location}"
+                f"Undefined variable in package definition: {err.message}.\n{stack}"
             ) from err
     return package_config
 
@@ -433,6 +443,7 @@ class _PackageProcessor:
         self,
         package_config: dict | str | yaml_util.IncludeFile,
         context_vars: ContextVars | None,
+        path: list[str | int],
     ) -> dict:
         """Resolve a package definition to a concrete ``dict`` and fetch remote packages.
 
@@ -457,13 +468,13 @@ class _PackageProcessor:
             if isinstance(package_config, yaml_util.IncludeFile):
                 package_config, _ = resolve_include(
                     package_config,
-                    [],
+                    path,
                     context_vars or ContextVars(),
                     strict_undefined=False,
                 )
 
             package_config = _substitute_package_definition(
-                package_config, context_vars
+                package_config, context_vars, path
             )
             package_config = PACKAGE_SCHEMA(package_config)
             if isinstance(package_config, dict):
@@ -484,13 +495,16 @@ class _PackageProcessor:
             _update_substitutions_context(self.parent_context, subs)
 
     def process_package(
-        self, package_config: dict | str, context_vars: ContextVars | None
+        self,
+        package_config: dict | str,
+        context_vars: ContextVars | None,
+        path: list[str | int],
     ) -> dict:
         """Resolve a single package and recurse into any nested packages."""
         from_remote = isinstance(package_config, dict) and is_remote_package(
             package_config
         )
-        package_config = self.resolve_package(package_config, context_vars)
+        package_config = self.resolve_package(package_config, context_vars, path)
         self.collect_substitutions(package_config)
 
         if CONF_PACKAGES not in package_config:
@@ -510,6 +524,7 @@ class _PackageProcessor:
             self.process_package,
             context_vars,
             validate_deprecated=not from_remote,
+            path=path,
         )
 
 
@@ -561,11 +576,11 @@ def merge_packages(config: dict) -> dict:
     merge_list: list[dict] = []
 
     def process_package_callback(
-        package_config: dict, context: ContextVars | None
+        package_config: dict, context: ContextVars | None, path: list[str | int] = None
     ) -> dict:
         """This will be called for each package found in the config."""
         merge_list.append(package_config)
-        return _walk_packages(package_config, process_package_callback)
+        return _walk_packages(package_config, process_package_callback, path=path)
 
     _walk_packages(config, process_package_callback, validate_deprecated=False)
     # Merge all packages into the main config:
